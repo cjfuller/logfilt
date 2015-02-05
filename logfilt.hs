@@ -1,4 +1,3 @@
-import Control.Monad (forever)
 import Text.Regex.PCRE
 
 data Color = Green | Red | Yellow | Magenta | Cyan | Grey | Clear deriving (Eq, Enum, Bounded, Ord, Show, Read)
