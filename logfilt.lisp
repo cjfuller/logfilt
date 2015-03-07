@@ -106,4 +106,10 @@
   (princ "\n")
   (finish-output nil)
   (main))
+
+#+sbcl
+(handler-case (main)
+  (sb-sys:interactive-interrupt ()
+    (sb-ext:quit)))
+#-sbcl
 (main)
