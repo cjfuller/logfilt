@@ -6,9 +6,7 @@
 (in-package :cl21-user)
 
 (defpackage :logfilt
-  (:use :cl21
-        :cl21.re
-        :cl21.process)
+  (:use :cl21)
   (:shadowing-import-from :cl-ppcre :split :all-matches-as-strings
                           :regex-replace-all)
   (:export main))
