@@ -1,17 +1,19 @@
 (load "~/quicklisp/setup.lisp")
 
 (let ((*standard-output* (make-broadcast-stream)))
-  (ql:quickload :cl21))
-
-(in-package :cl21-user)
+  (ql:quickload :cl-interpol)
+  (ql:quickload :cl-ppcre)
+  (ql:quickload :cjf-stdlib))
 
 (defpackage :logfilt
-  (:use :cl21)
+  (:use :cl :cl-interpol :cjf-stdlib)
   (:shadowing-import-from :cl-ppcre :split :all-matches-as-strings
                           :regex-replace-all)
   (:export main))
 
 (in-package :logfilt)
+
+(enable-interpol-syntax)
 
 (defvar *filters* `(
      ("INFO" . :green)
@@ -19,17 +21,17 @@
      ("ERROR" . :red)
      ("CRITICAL" . :magenta)
      ("^.*!!!.*$" . :cyan)
-     ("\\d{4}-\\d{2}-\\d{2}[^]]*]" . :grey)
+     (#?/\d{4}-\d{2}-\d{2}[^]]*]/ . :grey)
      ))
 
-(defvar *color-escapes* #H(
-  :red "\x1b[31;1m"
-  :green "\x1b[32;1m"
-  :yellow "\x1b[33;1m"
-  :magenta "\x1b[35;1m"
-  :cyan "\x1b[36;1m"
-  :clear "\x1b[0m"
-  :grey "\x1b[30;1m"
+(defvar *color-escapes* (ht
+  :red #?"\x1b[31m"
+  :green #?"\x1b[32m"
+  :yellow #?"\x1b[33m"
+  :magenta #?"\x1b[35m"
+  :cyan #?"\x1b[36m"
+  :clear #?"\x1b[0m"
+  :grey #?"\x1b[30;1m"
 
   ))
 
@@ -37,7 +39,7 @@
   (format nil ":~a:" color))
 
 (defvar *placeholders*
-  (map #'format-fn (hash-keys *color-escapes*)))
+  (mapcar #'format-fn (keys *color-escapes*)))
 
 (defun apply-filter (filt line)
   (let ((re (car filt))
@@ -83,7 +85,7 @@
        (cdr colors)
        (regex-replace-all (format-fn (car colors))
                           line
-                          (getf *color-escapes* (car colors))))
+                          (mget *color-escapes* (car colors))))
       line))
 
 (defun do-replacements (line)
@@ -95,15 +97,14 @@
                        :omit-unmatched-p t))
          (with-concrete-colors (restore-replacement-helper ""
                                 (format-fn :clear) parts)))
-    (concrete-color-replacement-helper (hash-keys *color-escapes*)
+    (concrete-color-replacement-helper (keys *color-escapes*)
                                        with-concrete-colors)))
 
 (defun process-line (line)
   (do-replacements (apply-filters *filters* line)))
 
 (defun main ()
-  (princ (process-line (read-line)))
-  (princ "\n")
+  (println (process-line (read-line)))
   (finish-output nil)
   (main))
 
