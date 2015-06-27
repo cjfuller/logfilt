@@ -3,10 +3,10 @@
 (let ((*standard-output* (make-broadcast-stream)))
   (ql:quickload :cl-interpol)
   (ql:quickload :cl-ppcre)
-  (ql:quickload :cjf-stdlib))
+  (ql:quickload :col))
 
 (defpackage :logfilt
-  (:use :cl :cl-interpol :cjf-stdlib)
+  (:use :cl :cl-interpol :col)
   (:shadowing-import-from :cl-ppcre :split :all-matches-as-strings
                           :regex-replace-all)
   (:export main))
