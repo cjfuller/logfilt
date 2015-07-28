@@ -1,127 +1,84 @@
-import Data.Array (elems)
-import Data.List (find, intercalate, sortBy)
-import Text.Regex.PCRE ((=~), MatchArray)
+module Logfilt where
 
-data Color = Green | Red | Yellow | Magenta | Cyan | Grey | Clear deriving (Eq, Enum, Bounded, Ord, Show, Read)
+import Data.List (find, intercalate, sortBy, intersperse)
+import Text.Regex (subRegex, splitRegex, mkRegex)
+import Text.Regex.Posix ((=~), getAllTextMatches)
+
+data Color = Green | Red | Yellow | Magenta | Cyan | Grey | Clear | Restore deriving (Eq, Enum, Bounded, Show, Read)
 
 colorCode :: Color -> String
+colorCode Red = "\x1b[31;1m"
+colorCode Green = "\x1b[32;1m"
+colorCode Yellow = "\x1b[33;1m"
+colorCode Magenta = "\x1b[35;1m"
+colorCode Cyan = "\x1b[36;1m"
+colorCode Grey = "\x1b[30;1m"
+colorCode Clear = "\x1b[0m"
 
-colorCode color
-    | color == Red = "\x1b[31;1m"
-    | color == Green = "\x1b[32;1m"
-    | color == Yellow = "\x1b[33;1m"
-    | color == Magenta = "\x1b[35;1m"
-    | color == Cyan = "\x1b[36;1m"
-    | color == Grey = "\x1b[30;1m"
-    | color == Clear = "\x1b[0m"
-
-
-escapeColorCode :: String -> String
--- Escape the [ within the color codes so they can be used in regular expressions.
-escapeColorCode "" = ""
-escapeColorCode (c0:rem)
-    | c0 == '[' = "\\[" ++ escapeColorCode rem
-    | otherwise = [c0] ++ escapeColorCode rem
-
-
-codeRe = "(" ++ (intercalate "|" $ map (escapeColorCode . colorCode) [Green .. Clear]) ++ ")"
-
-
-colorFromCode :: String -> Color
--- Reverse the colorCode function and get a Color from the string code.
--- Default to Clear if it's not a known color code.
-colorFromCode code = case find (\color -> (colorCode color) == code) [Green .. Clear] of
-                       Nothing -> Clear
-                       Just c -> c
-
-
-slice :: Int -> Int -> String -> String
--- Slice a String, starting at a given position and having a given length.
-slice start len str = fst $ splitAt len (snd $ splitAt start str)
-
-
-getRestoreColor :: String -> Int -> Color
--- Find the current color as of a specified position in a string.
--- When we're adding additional colors on top, this will be the color to which
--- we restore.
-getRestoreColor line newColorPos =
-    let existingColors :: [MatchArray]
-        existingColors = (line =~ codeRe)
-    -- This finds the color tags in the string before the current position.
-    in case takeWhile (\(i, _) -> i < newColorPos) $ map (head . elems) existingColors of
-         [] -> Clear
-         matches -> let (start, len) = last matches
-                    in colorFromCode $ slice start len line
-
-
-colorize :: Color -> Color -> String -> String
--- Colorize a string with a specified color, returning to the specified
--- restoreColor afterwards.
-colorize color restoreColor str = (colorCode color) ++ str ++ (colorCode restoreColor)
-
-
-maybeColorizeLine :: Color -> String -> String -> String
--- Colorize an entire string if it matches a specified regular expression.
-maybeColorizeLine color re line =
-    if line =~ re then
-        colorize color Clear line
-    else
-        line
-
-
-colorizationFoldFunction ::
-    Color -> String -> (Int, String) -> (Int, Int) -> (Int, String)
--- Function that when curried serves as the fold function for parial colorization.
--- Curry with the color being added and the (complete) line being colorized.
---
--- The resulting fold function uses an accumulator (lastPos, str) that contains
--- the last position in the input string that has been processed, and the string
--- result from colorizing up to that point.  The current element for the fold
--- function is the segment (start, len) indexed to the input string to which to
--- apply the color.
-colorizationFoldFunction color line acc curr =
-    let before = (snd acc) ++ (slice (fst acc) ((fst curr) - (fst acc)) line)
-        restoreColor = getRestoreColor before (length before)
-    in ((fst curr) + (snd curr)
-       ,before ++ (colorize color restoreColor (slice (fst curr) (snd curr) line)))
-
-
-colorizationREMatches :: String -> String -> [(Int, Int)]
--- Retrieve a list of all (start, len) matches to a given regular expression.
-colorizationREMatches line re =
-    let matches :: [MatchArray]
-        matches = (line =~ re)
-    in map (head . elems) matches
-
-
-maybeColorizePartial :: Color -> String -> String -> String
--- Colorize all segments of a string matching a given regular expression.
-maybeColorizePartial color re line =
-    let matchList = colorizationREMatches line re
-        (endIndex, coloredString) =
-            (foldl (colorizationFoldFunction color line) (0, "")
-                   matchList)
-    in coloredString  ++ (snd $ splitAt endIndex line)
-
-
-matchers :: [String -> String]
--- List of matchers that will be colorized in log lines.  Items higher up the
+filters:: [(String, Color)]
+-- List of expressions that will be colorized in log lines.  Items higher up the
 -- list should represent more specific rules.  They will embed correctly in the
 -- context of colored regions lower down the list, but the reverse is not true.
-matchers = [
- (maybeColorizePartial Green "INFO"),
- (maybeColorizePartial Yellow "WARNING"),
- (maybeColorizePartial Red "ERROR"),
- (maybeColorizePartial Magenta "CRITICAL"),
+filters = [
+ ("INFO", Green),
+ ("WARNING", Yellow),
+ ("ERROR", Red),
+ ("CRITICAL", Magenta),
  -- Time and date info
- (maybeColorizePartial Grey "\\d{4}-\\d{2}-\\d{2}[^]]*]"),
+ ("[[:digit:]]{4}-[[:digit:]]{2}-[[:digit:]]{2}[^]]*]", Grey),
  -- Colorize cyan to the end of line any log message starting with !!!
  -- Useful for quickly highlighting a specific debugging message in the logs.
- (maybeColorizeLine Cyan "!!!.*$")]
+ ("!!!.*$", Cyan)]
 
+colorRe :: String
+colorRe = ":(" ++ (intercalate "|" [show c | c <- [Green .. Clear]]) ++ "):"
+
+formatColor :: Color -> String
+formatColor c = ":" ++ (show c) ++ ":"
+
+applyFilter :: (String, Color) -> String -> String
+applyFilter (re, color) line = subRegex (mkRegex re) line ((formatColor color) ++ "\\0" ++ (formatColor Restore))
+
+applyFilters :: [(String, Color)] -> String -> String
+applyFilters [] s = s
+applyFilters (f:rest) s = applyFilters rest $ applyFilter f s
+
+
+nextToLastColor :: [Color] -> Color
+nextToLastColor [] = Clear
+nextToLastColor [_] = Clear
+nextToLastColor (_:c:_) = c
+
+extractColors :: String -> [Color]
+extractColors s = map read $ map (filter ((/=) ':')) $ getAllTextMatches $ s =~ colorRe
+
+
+restoreReplacementHelper :: String -> Color -> [String] -> String
+restoreReplacementHelper building _ [] = building
+restoreReplacementHelper building currColor (part:remaining)
+    | part == formatColor Restore =
+        restoreReplacementHelper (building ++ (formatColor currColor)) currColor remaining
+    | otherwise =
+        let newBuilding = building ++ part in
+        let prevColor = nextToLastColor (extractColors newBuilding) in
+        restoreReplacementHelper newBuilding prevColor remaining
+
+concreteColorReplacementHelper :: [Color] -> String -> String
+concreteColorReplacementHelper [] line = line
+concreteColorReplacementHelper (c:remColors) line =
+    concreteColorReplacementHelper remColors (subRegex (mkRegex $ formatColor c) line $ colorCode c)
+
+doReplacements :: String -> String
+doReplacements line =
+    let parts = splitRegex (mkRegex $ formatColor Restore) line in
+    concreteColorReplacementHelper [Green .. Clear] $
+                                   restoreReplacementHelper "" Clear $
+                                                            intersperse (formatColor Restore) parts
+
+processLine :: String -> String
+processLine = doReplacements . (applyFilters filters)
 
 main =
-    let matcherFn = foldl1 (\f0 f1 -> f0 . f1) matchers
-    in do
+    do
       input <- getContents
-      putStr . unlines $ map matcherFn $ lines input
+      putStr . unlines $ map processLine $ lines input
