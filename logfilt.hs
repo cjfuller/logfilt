@@ -24,6 +24,8 @@ filters = [
  ("WARNING", Yellow),
  ("ERROR", Red),
  ("CRITICAL", Magenta),
+ ("VALID", Green),
+ ("INVALID", Yellow),
  -- Time and date info
  ("[[:digit:]]{4}-[[:digit:]]{2}-[[:digit:]]{2}[^]]*]", Grey),
  -- Colorize cyan to the end of line any log message starting with !!!
