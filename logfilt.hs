@@ -4,7 +4,7 @@ import Data.List (find, intercalate, sortBy, intersperse)
 import Text.Regex (subRegex, splitRegex, mkRegex)
 import Text.Regex.Posix ((=~), getAllTextMatches)
 
-data Color = Green | Red | Yellow | Magenta | Cyan | Grey | Clear | Restore deriving (Eq, Enum, Bounded, Show, Read)
+data Color = Green | Red | Yellow | Magenta | Cyan | Grey | White | Clear | Restore deriving (Eq, Enum, Bounded, Show, Read)
 
 colorCode :: Color -> String
 colorCode Red = "\x1b[31;1m"
@@ -13,6 +13,7 @@ colorCode Yellow = "\x1b[33;1m"
 colorCode Magenta = "\x1b[35;1m"
 colorCode Cyan = "\x1b[36;1m"
 colorCode Grey = "\x1b[30;1m"
+colorCode White = "\x1b[37;1m"
 colorCode Clear = "\x1b[0m"
 
 filters:: [(String, Color)]
@@ -26,6 +27,7 @@ filters = [
  ("CRITICAL", Magenta),
  ("INVALID", Yellow),
  ("[[:<:]]VALID", Green),
+ ("DEBUG", White),
  -- Time and date info
  ("[[:digit:]]{4}-[[:digit:]]{2}-[[:digit:]]{2}[^]]*]", Grey),
  -- Colorize cyan to the end of line any log message starting with !!!

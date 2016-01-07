@@ -1,4 +1,4 @@
-defmodule LogFilt do
+defmodule Logfilt do
 
   @match_table [
           {~r/INFO/, :green},
@@ -9,13 +9,24 @@ defmodule LogFilt do
           {~r/\d{4}-\d{2}-\d{2}[^]]*]/, :grey},
       ]
 
+  @delete_lines [
+    ~r/recording\.py/,
+    ~r{GET /gae_mini_profiler},
+    ~r/Stripped prohibited headers from URLFetch request: \['Host'\]/,
+    ~r/Mismatch between XSRF header \(None\) and cookie/
+  ]
+
+  @delete_expressions [
+    ~r/\d{4}-\d{2}-\d{2}[^]]*]/
+  ]
+
   @color_map %{
-                 red: "\x1b[31;1m",
-                 green: "\x1b[32;1m",
-                 yellow: "\x1b[33;1m",
-                 magenta: "\x1b[35;1m",
-                 cyan: "\x1b[36;1m",
-                 grey: "\x1b[30;1m",
+                 red: "\x1b[31m",
+                 green: "\x1b[32m",
+                 yellow: "\x1b[33m",
+                 magenta: "\x1b[35m",
+                 cyan: "\x1b[36m",
+                 grey: "\x1b[30m",
                  clear: "\x1b[0m",
              }
 
@@ -98,21 +109,20 @@ defmodule LogFilt do
     |> apply_prioritized_colorization(line)
   end
 
+  def delete_expressions line do
+    Enum.reduce(@delete_expressions, line, fn regex, repl -> Regex.replace(regex, repl, "") end)
+  end
+
   @doc """
   Continually read from stdin, colorize the lines, and write to stdout.
   """
-  def main do
-    case IO.read :line do
-      {:error, _} ->
-        nil
-      :eof ->
-        nil
-      s ->
-        IO.puts colorize_line String.strip s
-        main
-    end
+  def main(_args) do
+    IO.stream(:stdio, :line)
+    |> Stream.filter(fn line -> Enum.all?(@delete_lines, fn regex -> not Regex.match?(regex, line) end) end)
+    |> Stream.map(&String.strip/1)
+    |> Stream.map(&delete_expressions/1)
+    |> Stream.map(&colorize_line/1)
+    |> Enum.each(&IO.puts(&1))
   end
 
 end
-
-LogFilt.main

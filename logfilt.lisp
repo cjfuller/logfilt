@@ -1,9 +1,15 @@
+;; To rebuild executable (ccl)
+;; (load "logfilt.lisp")
+;; (ccl:save-application "logfilt" :toplevel-function #'logfilt:main :prepend-kernel t)
+
 (load "~/quicklisp/setup.lisp")
 
 (let ((*standard-output* (make-broadcast-stream)))
   (ql:quickload :cl-interpol)
   (ql:quickload :cl-ppcre)
   (ql:quickload :col))
+
+(in-package :cl-user)
 
 (defpackage :logfilt
   (:use :cl :cl-interpol :col)
@@ -15,25 +21,24 @@
 
 (enable-interpol-syntax)
 
-(defvar *filters* `(
-     ("INFO" . :green)
-     ("WARNING" . :yellow)
-     ("ERROR" . :red)
-     ("CRITICAL" . :magenta)
-     ("^.*!!!.*$" . :cyan)
-     (#?/\d{4}-\d{2}-\d{2}[^]]*]/ . :grey)
-     ))
+(defvar *filters*
+  `(("INFO" . :green)
+    ("WARNING" . :yellow)
+    ("ERROR" . :red)
+    ("CRITICAL" . :magenta)
+    ("^.*!!!.*$" . :blue)
+    (#?/Profile start .*\.\.\./ . :green)
+    (#?/Profile stop .* sec./ . :red)
+    (#?/\s\d{4}-\d{2}-\d{2}(?:\s|\d|:|,)+/ . :delete)))
 
 (defvar *color-escapes* (ht
   :red #?"\x1b[31m"
   :green #?"\x1b[32m"
   :yellow #?"\x1b[33m"
   :magenta #?"\x1b[35m"
-  :cyan #?"\x1b[36m"
+  :blue #?"\x1b[34m"
   :clear #?"\x1b[0m"
-  :grey #?"\x1b[30;1m"
-
-  ))
+  :white #?"\x1b[37m"))
 
 (defun format-fn (color)
   (format nil ":~a:" color))
@@ -44,10 +49,13 @@
 (defun apply-filter (filt line)
   (let ((re (car filt))
         (color (cdr filt)))
-    (regex-replace-all re line (concatenate 'string
-                                            (format-fn color)
-                                            "\\&"
-                                            (format-fn :restore)))))
+    (let ((replacement (if (eql color :delete)
+                           ""
+                           (concatenate 'string
+                                        (format-fn color)
+                                        "\\&"
+                                        (format-fn :restore)))))
+      (regex-replace-all re line replacement))))
 
 (defun apply-filters (flist line)
   (if flist
@@ -76,8 +84,7 @@
         (restore-replacement-helper new-building
                                     (or last-color curr-color)
                                     (cdr remaining)))
-      building
-      ))
+      building))
 
 (defun concrete-color-replacement-helper (colors line)
   (if colors
@@ -103,14 +110,26 @@
 (defun process-line (line)
   (do-replacements (apply-filters *filters* line)))
 
-(defun main ()
+(defun internal-main ()
+  (declare (optimize (debug 0)))
   (println (process-line (read-line)))
   (finish-output nil)
-  (main))
+  (internal-main))
 
-#+sbcl
-(handler-case (main)
-  (sb-sys:interactive-interrupt ()
-    (sb-ext:quit)))
-#-sbcl
+(defun main (&optional argv)
+  (declare (ignore argv))
+  #+sbcl
+  (handler-case (internal-main)
+    (sb-sys:interactive-interrupt ()
+      (sb-ext:quit)))
+  #+ccl
+  (progn
+    (setf ccl:*break-hook*
+          (lambda (condition hook)
+            (declare (ignore hook)
+                     (ignore condition))
+            (ccl:quit)))
+    (internal-main))
+  )
+
 (main)
