@@ -1,13 +1,14 @@
 defmodule Logfilt do
 
   @match_table [
-          {~r/INFO/, :green},
-          {~r/WARNING/, :yellow},
-          {~r/ERROR/, :red},
-          {~r/CRITICAL/, :magenta},
-          {~r/^.*!!!.*$/, :cyan},
-          {~r/\d{4}-\d{2}-\d{2}[^]]*]/, :grey},
-      ]
+    {~r/INFO/, :green},
+    {~r/WARNING/, :yellow},
+    {~r/ERROR/, :red},
+    {~r/CRITICAL/, :magenta},
+    {~r/^.*!!!.*$/, :cyan},
+    {~r/\d{4}-\d{2}-\d{2}[^]]*]/, :grey},
+    {~r/SAT/, :blue}
+  ]
 
   @delete_lines [
     ~r/recording\.py/,
@@ -17,18 +18,19 @@ defmodule Logfilt do
   ]
 
   @delete_expressions [
-    ~r/\d{4}-\d{2}-\d{2}[^]]*]/
+    ~r/\d{4}-\d{2}-\d{2}\s*(\d{2}:\d{2}:\d{2})[^]]*]/
   ]
 
   @color_map %{
-                 red: "\x1b[31m",
-                 green: "\x1b[32m",
-                 yellow: "\x1b[33m",
-                 magenta: "\x1b[35m",
-                 cyan: "\x1b[36m",
-                 grey: "\x1b[30m",
-                 clear: "\x1b[0m",
-             }
+    red: IO.ANSI.red,
+    green: IO.ANSI.green,
+    yellow: IO.ANSI.yellow,
+    magenta: IO.ANSI.magenta,
+    cyan: IO.ANSI.cyan,
+    grey: IO.ANSI.black,
+    blue: IO.ANSI.blue,
+    clear: IO.ANSI.reset,
+  }
 
 
   @doc """
@@ -40,7 +42,7 @@ defmodule Logfilt do
   """
   def maybe_colorize_partial priority, color, pat, line do
     Regex.scan(pat, line, return: :index)
-    |> Enum.map fn [{start, len}|_] -> {priority, start, len, color} end
+    |> Enum.map(fn [{start, len}|_] -> {priority, start, len, color} end)
   end
 
   @doc """
@@ -110,7 +112,8 @@ defmodule Logfilt do
   end
 
   def delete_expressions line do
-    Enum.reduce(@delete_expressions, line, fn regex, repl -> Regex.replace(regex, repl, "") end)
+    Enum.reduce(@delete_expressions, line,
+                fn regex, repl -> Regex.replace(regex, repl, "\\1") end)
   end
 
   @doc """
