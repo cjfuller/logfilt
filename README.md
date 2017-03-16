@@ -7,4 +7,5 @@ Usage:
 Building:
 
 `go get github.com/fatih/color`
+
 `go build logfilt.go`
