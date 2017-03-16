@@ -1,10 +1,10 @@
-An extensible Haskell command-line tool for filtering and colorizing logs.
+A command line tool for coloring and filtering logs.
 
-(Primarily intended for teaching myself some Haskell.)
+Usage:
 
-It reads from stdin and writes to stdout, so use accordingly.
+`some_command_with_logs | logfilt`
 
-Example usage:
+Building:
 
-`some_program_that_generates_logs | runhaskell logfilt.hs`
-
+`go get github.com/fatih/color`
+`go build logfilt.go`
