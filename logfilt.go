@@ -28,6 +28,7 @@ var expressionsToDelete = []*regexp.Regexp{
 
 var colorRegexes = map[*regexp.Regexp](*color.Color){
 	regexp.MustCompile("^.*!!!.*$"):                   color.New(color.FgCyan),
+	regexp.MustCompile("^.*---.*$"):                   color.New(color.FgCyan),
 	regexp.MustCompile("\\d{4}-\\d{2}-\\d{2}[^]]*]/"): color.New(color.FgHiBlack),
 	regexp.MustCompile("INFO"):                        color.New(color.FgGreen),
 	regexp.MustCompile("WARNING"):                     color.New(color.FgYellow),
