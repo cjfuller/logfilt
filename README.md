@@ -4,8 +4,6 @@ Usage:
 
 `some_command_with_logs | logfilt`
 
-Building:
+Installing:
 
-`go get github.com/fatih/color`
-
-`go build logfilt.go`
+`go get github.com/cjfuller/logfilt`
